@@ -38,7 +38,6 @@ $current_date = date('Y-m-d');
         <ul class="nav flex-column mt-4">
             <li class="nav-item"><a class="nav-link" href="student_dashboard.php"><i class="fa-solid fa-house me-3"></i> หน้าหลัก</a></li>
             <li class="nav-item"><a class="nav-link active" href="daily_log.php"><i class="fa-solid fa-pen-to-square me-3"></i> บันทึกงานรายวัน</a></li>
-            <li class="nav-item"><a class="nav-link" href="weekly_submit.php"><i class="fa-solid fa-paper-plane me-3"></i> ส่งอนุมัติรายสัปดาห์</a></li>
             <li class="nav-item"><a class="nav-link" href="log_history.php"><i class="fa-solid fa-clock-rotate-left me-3"></i> ประวัติย้อนหลัง</a></li>
         </ul>
     </div>

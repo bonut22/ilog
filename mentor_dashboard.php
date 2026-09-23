@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action_type'])) {
     $mentor_remark = mysqli_real_escape_string($conn, $_POST['mentor_remark'] ?? '');
 
     $sql_update = "UPDATE tb_daily_logs 
-                   SET status = '$status_action', mentor_remark = '$mentor_remark' 
-                   WHERE log_id = '$log_id'";
+    SET status = '$status_action' 
+    WHERE log_id = '$log_id'";
 
     if (mysqli_query($conn, $sql_update)) {
         $status_text = ($status_action == 'approved') ? 'อนุมัติเรียบร้อยแล้ว' : 'ปฏิเสธรายการเรียบร้อยแล้ว';
@@ -231,7 +231,7 @@ if (!empty($selected_std_id)) {
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <div class="modal-body text-center p-3">
-                                                            <img src="uploads/<?php echo $row['log_image']; ?>" class="img-fluid rounded-3" alt="หลักฐาน">
+                                                        <img src="assets/images/uploads/<?php echo $row['log_image']; ?>" class="img-fluid rounded-3" alt="หลักฐาน">
                                                         </div>
                                                     </div>
                                                 </div>

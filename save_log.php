@@ -2,6 +2,7 @@
 // save_log.php
 session_start();
 include('config/db_connect.php'); // เชื่อมต่อฐานข้อมูล
+if ($conn) {$conn->set_charset("utf8mb4"); }
 
 // ตรวจสอบความปลอดภัย: ต้องเป็นนักศึกษาที่ล็อกอินอยู่เท่านั้น
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'student') {
@@ -11,56 +12,55 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'student') {
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // 1. รับค่าจากฟอร์มและป้องกัน SQL Injection
-    $student_id  = $_SESSION['student_id'];
-    $log_date    = mysqli_real_escape_string($conn, $_POST['log_date']);
-    $time_in     = mysqli_real_escape_string($conn, $_POST['time_in']);
-    $time_out    = mysqli_real_escape_string($conn, $_POST['time_out']);
-    $work_detail = mysqli_real_escape_string($conn, $_POST['work_detail']);
+    $student_id  = $_SESSION['student_id'] ?? $_SESSION['user_id']; 
     
-    // สมมติค่าสัปดาห์ที่ฝึกงาน (สัปดาห์ที่ 1) สำหรับเวอร์ชันเริ่มต้น 
-    // (ในอนาคตสามารถเขียนโค้ดคำนวณอัตโนมัติจากวันที่ได้ค่ะ)
-    $week_number = 1; 
+    // หาก $_SESSION['student_id'] ไม่มีค่า ให้ดึงจากฐานข้อมูล
+    if (empty($_SESSION['student_id'])) {$user_id = $_SESSION['user_id'];$sql_std = "SELECT student_id FROM tb_students WHERE user_id = '$user_id'";
+        $res_std = mysqli_query($conn,$sql_std);
+        $row_std = mysqli_fetch_assoc($res_std);
+        $student_id =$row_std['student_id'];
+    }
 
-    $filename_db = null; // ตั้งค่าเริ่มต้นของชื่อไฟล์ในฐานข้อมูลเป็นค่าว่าง
+    $log_type    = mysqli_real_escape_string($conn, $_POST['log_type']);$log_date    = mysqli_real_escape_string($conn,$_POST['log_date']);
+    
+    // ถ้าเลือกลางาน ให้เวลาเข้า-ออกเป็นค่าว่าง
+    $time_in     = ($log_type == 'work') ? mysqli_real_escape_string($conn,$_POST['time_in']) : NULL;
+    $time_out    = ($log_type == 'work') ? mysqli_real_escape_string($conn,$_POST['time_out']) : NULL;
+    
+    $work_detail = mysqli_real_escape_string($conn, $_POST['work_detail']);$week_number = 1; 
+    $filename_db = NULL; 
 
     // 2. ระบบอัปโหลดรูปภาพหลักฐาน (File Upload Handling)
-    if (isset($_FILES['log_image']) && $_FILES['log_image']['error'] == 0) {
-        $allowed_extensions = array('jpg', 'jpeg', 'png', 'gif');
-        
-        // ดึงนามสกุลไฟล์จริงของรูปภาพออกมา เช่น .jpg หรือ .png
+    if (isset($_FILES['log_image']) && $_FILES['log_image']['error'] == 0) {$allowed_extensions = array('jpg', 'jpeg', 'png', 'gif');
         $file_extension = strtolower(pathinfo($_FILES['log_image']['name'], PATHINFO_EXTENSION));
 
-        // ตรวจสอบว่านามสกุลไฟล์ตรงตามที่อนุญาตไหม
-        if (in_array($file_extension, $allowed_extensions)) {
+        if (in_array($file_extension, $allowed_extensions)) {$new_filename = "STD_" . $student_id . "_" . time() . "." . $file_extension;
             
-            // ตั้งชื่อไฟล์ใหม่เพื่อไม่ให้ซ้ำกันในระบบ: STD_รหัสนักศึกษา_ตามด้วยเวลาปัจจุบัน.นามสกุล
-            $new_filename = "STD_" . $student_id . "_" . time() . "." . $file_extension;
-            
-            // กำหนดพาธปลายทางที่จะเอาไฟล์รูปไปหย่อนไว้
-            $upload_target = "assets/images/uploads/" . $new_filename;
+            // 🔥 สร้างโฟลเดอร์อัตโนมัติหากยังไม่มี (แก้ปัญหาอัปโหลดไม่เข้า)
+            $upload_dir = "assets/images/uploads/";
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
 
-            // ย้ายไฟล์จากโฟลเดอร์ชั่วคราวของเซิร์ฟเวอร์ เข้าสู่โฟลเดอร์โปรเจกต์จริง
-            if (move_uploaded_file($_FILES['log_image']['tmp_name'], $upload_target)) {
-                $filename_db = $new_filename; // บันทึกชื่อไฟล์ใหม่เตรียมเอาไปลง Database
+            $upload_target = $upload_dir .$new_filename;
 
-            // 🔥 เติมบรรทัดนี้เพิ่มเข้าไปค่ะ: สั่งให้ PHP ปลดล็อกสิทธิ์ไฟล์นี้เป็น 0777 (Everyone) ทันที
+            if (move_uploaded_file($_FILES['log_image']['tmp_name'],$upload_target)) {
+                $filename_db =$new_filename; 
                 chmod($upload_target, 0777);
             }
         }
     }
 
-    // 3. คำสั่ง SQL ยิงข้อมูลเข้าตาราง tb_daily_logs ที่เราสร้างไว้ใน phpMyAdmin
-    $sql = "INSERT INTO `tb_daily_logs` (`student_id`, `log_date`, `time_in`, `time_out`, `work_detail`, `log_image`, `week_number`) 
-            VALUES ('$student_id', '$log_date', '$time_in', '$time_out', '$work_detail', '$filename_db', '$week_number')";
+    // 3. คำสั่ง SQL ยิงข้อมูลเข้าตาราง (เพิ่ม log_type และกำหนด status = pending)
+    $sql = "INSERT INTO `tb_daily_logs` (`student_id`, `log_date`, `log_type`, `time_in`, `time_out`, `work_detail`, `log_image`, `week_number`, `status`) 
+            VALUES ('$student_id', '$log_date', '$log_type', '$time_in', '$time_out', '$work_detail', '$filename_db', '$week_number', 'pending')";
 
-    if (mysqli_query($conn, $sql)) {
-        // บันทึกสำเร็จ: แสดง Alert สวย ๆ แล้วพากระโดดกลับหน้า Dashboard
+    if (mysqli_query($conn,$sql)) {
         echo "<script>
                 alert('บันทึกข้อมูลการปฏิบัติงานประจำวันสำเร็จแล้วค่ะ!');
-                window.location.href='student_dashboard.php';
+                window.location.href='log_history.php';
               </script>";
     } else {
-        // บันทึกล้มเหลว
         echo "เกิดข้อผิดพลาดในการบันทึกข้อมูล: " . mysqli_error($conn);
     }
 }

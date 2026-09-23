@@ -1,36 +1,37 @@
 <?php
-// advisor/advisor_students.php
 session_start();
-// include('../config/db_connect.php'); // เปิดคอมเมนต์เมื่อเชื่อมต่อฐานข้อมูลจริง
 
-$advisor_name = $_SESSION['full_name'] ?? "อาจารย์ธนชัย ปฐมรัตน์";
+// ตรวจสอบสิทธิ์การเข้าใช้งาน
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../login.php");
+    exit();
+}
 
-$students = [
-    [
-        'student_id' => '66124630101',
-        'name' => 'นายพัฐธนนท์ ชื่นอารมณ์',
-        'major' => 'เทคโนโลยีสารสนเทศ',
-        'company' => 'บริษัท เทคโนโลยี ดิจิทัล จำกัด',
-        'mentor' => 'คุณสมชาย ใจดี',
-        'approved_hours' => 120
-    ],
-    [
-        'student_id' => '66124630102',
-        'name' => 'นางสาวสมศรี เรียนดี',
-        'major' => 'เทคโนโลยีสารสนเทศ',
-        'company' => 'บริษัท อินโนเวชัน ซอฟต์แวร์',
-        'mentor' => 'คุณวิชัย พัฒนา',
-        'approved_hours' => 450
-    ],
-    [
-        'student_id' => '66124630103',
-        'name' => 'นายสมศักดิ์ มุ่งมั่น',
-        'major' => 'เทคโนโลยีสารสนเทศ',
-        'company' => 'สถาบันวิจัยไอที มรภ.เทพสตรี',
-        'mentor' => 'คุณอารี มีสุข',
-        'approved_hours' => 80
-    ]
-];
+include('../config/db_connect.php');
+if ($conn) { $conn->set_charset("utf8mb4"); }
+
+$advisor_name = $_SESSION['full_name'] ?? "อาจารย์นิเทศก์";
+
+// 📌 คำสั่งดึงข้อมูลนักศึกษา บริษัท พี่เลี้ยง และคำนวณชั่วโมง
+$sql_students = "SELECT 
+                    s.student_id, 
+                    u.full_name AS student_name, 
+                    s.major,
+                    c.company_name,
+                    m_user.full_name AS mentor_name,
+                    COALESCE(SUM(
+                        CASE WHEN d.status = 'approved' AND d.log_type = 'work' 
+                        THEN ROUND(TIME_TO_SEC(TIMEDIFF(d.time_out, d.time_in)) / 3600, 1) ELSE 0 END
+                    ), 0) AS total_hours
+                 FROM tb_students s
+                 JOIN tb_users u ON s.user_id = u.user_id
+                 LEFT JOIN tb_companies c ON s.company_id = c.company_id
+                 LEFT JOIN tb_users m_user ON s.mentor_id = m_user.user_id
+                 LEFT JOIN tb_daily_logs d ON s.student_id = d.student_id
+                 GROUP BY s.student_id
+                 ORDER BY s.student_id ASC";
+
+$res_students = mysqli_query($conn, $sql_students);
 ?>
 
 <!DOCTYPE html>
@@ -50,22 +51,13 @@ $students = [
         
         .logout-item { position: absolute; bottom: 25px; left: 20px; right: 20px; }
         .btn-logout {
-            color: #FC8181 !important;
-            border: 1px solid rgba(252, 129, 129, 0.3) !important;
-            border-radius: 10px;
-            background-color: rgba(252, 129, 129, 0.05);
-            transition: all 0.3s ease;
-            padding: 12px 18px;
+            color: #FC8181 !important; border: 1px solid rgba(252, 129, 129, 0.3) !important;
+            border-radius: 10px; background-color: rgba(252, 129, 129, 0.05); transition: all 0.3s ease;
         }
-        .btn-logout:hover {
-            color: white !important;
-            background-color: #E53E3E !important;
-            border-color: #E53E3E !important;
-            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
-        }
+        .btn-logout:hover { color: white !important; background-color: #E53E3E !important; }
 
         .main-content { margin-left: 250px; padding: 30px 40px; }
-        .text-orange { color: #FD5D00; }
+        .card-custom { border-radius: 15px; border: none; box-shadow: 0 5px 20px rgba(0,0,0,0.03); }
     </style>
 </head>
 <body>
@@ -73,25 +65,31 @@ $students = [
 <div class="sidebar p-3 d-flex flex-column justify-content-between">
     <div>
         <div class="text-center my-4">
-            <img src="../assets/images/logo.jpg" alt="Logo" class="img-fluid rounded mb-2" style="max-width: 65px;">
-            <h6 class="fw-bold mb-0 text-white">คณะเทคโนโลยีสารสนเทศ</h6>
-            <small class="text-secondary">มรภ.เทพสตรี</small>
+            <img src="../assets/images/logo.jpg" alt="Logo" class="img-fluid rounded mb-2" style="max-width: 60px;">
+            <h6 class="m-0 small fw-bold text-white">คณะเทคโนโลยีสารสนเทศ</h6>
+            <p class="small text-secondary mb-0">มรภ.เทพสตรี</p>
         </div>
+        <hr class="text-secondary">
         <ul class="nav flex-column mt-4">
             <li class="nav-item">
-                <a href="dashboard.php" class="nav-link"><i class="fa-solid fa-chart-pie me-3"></i> หน้าหลักอาจารย์</a>
+                <a href="dashboard.php" class="nav-link">
+                    <i class="fa-solid fa-chart-pie me-2"></i> หน้าหลักอาจารย์
+                </a>
             </li>
             <li class="nav-item">
-                <a href="advisor_students.php" class="nav-link active"><i class="fa-solid fa-users me-3"></i> นักศึกษาในความดูแล</a>
+                <a href="advisor_students.php" class="nav-link active">
+                    <i class="fa-solid fa-users me-2"></i> นักศึกษาในความดูแล
+                </a>
             </li>
             <li class="nav-item">
-                <a href="advisor_supervision.php" class="nav-link"><i class="fa-solid fa-clipboard-check me-3"></i> บันทึกการนิเทศงาน</a>
+                <a href="advisor_supervision.php" class="nav-link">
+                    <i class="fa-solid fa-clipboard-check me-2"></i> บันทึกการนิเทศงาน
+                </a>
             </li>
         </ul>
     </div>
-
     <div class="logout-item">
-        <a class="nav-link text-center fw-bold btn-logout" href="../logout.php">
+        <a href="../logout.php" class="nav-link text-center btn-logout fw-bold">
             <i class="fa-solid fa-right-from-bracket me-2"></i> ออกจากระบบ
         </a>
     </div>
@@ -100,42 +98,47 @@ $students = [
 <div class="main-content">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold m-0">รายชื่อนักศึกษาในความดูแล</h4>
+            <h4 class="fw-bold text-dark mb-1">รายชื่อนักศึกษาในความดูแล</h4>
             <p class="text-muted m-0">อาจารย์นิเทศก์: <?php echo $advisor_name; ?></p>
         </div>
-        <span class="badge bg-primary px-3 py-2 rounded-pill">ปีการศึกษา 2569</span>
+        <span class="badge bg-primary px-3 py-2 rounded-pill fw-bold fs-6">ปีการศึกษา 2569</span>
     </div>
 
-    <div class="card border-0 shadow-sm p-4" style="border-radius: 15px;">
+    <!-- ตารางรายชื่อนักศึกษา -->
+    <div class="card card-custom p-4 bg-white">
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>รหัสนักศึกษา</th>
-                        <th>ชื่อ - นามสกุล</th>
-                        <th>สาขาวิชา</th>
-                        <th>สถานประกอบการ</th>
-                        <th>พี่เลี้ยงหลัก</th>
-                        <th class="text-center">ชั่วโมงสะสม</th>
-                        <th class="text-center">การจัดการ</th>
+                        <th style="width: 15%;">รหัสนักศึกษา</th>
+                        <th style="width: 20%;">ชื่อ - นามสกุล</th>
+                        <th style="width: 15%;">สาขาวิชา</th>
+                        <th style="width: 20%;">สถานประกอบการ</th>
+                        <th style="width: 15%;">พี่เลี้ยงหลัก</th>
+                        <th style="width: 10%; text-align: center;">ชั่วโมงสะสม</th>
+                        <th style="width: 5%; text-align: center;">การจัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($students as $row): ?>
-                    <tr>
-                        <td class="fw-bold text-orange"><?php echo $row['student_id']; ?></td>
-                        <td><?php echo $row['name']; ?></td>
-                        <td><?php echo $row['major']; ?></td>
-                        <td><?php echo $row['company']; ?></td>
-                        <td><?php echo $row['mentor']; ?></td>
-                        <td class="text-center fw-bold text-success"><?php echo $row['approved_hours']; ?> / 480 ชม.</td>
-                        <td class="text-center">
-                            <a href="advisor_supervision.php?student_id=<?php echo $row['student_id']; ?>" class="btn btn-warning btn-sm text-dark rounded-pill px-3 fw-bold">
-                                <i class="fa-solid fa-pen-to-square me-1"></i> นิเทศงาน
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
+                    <?php if ($res_students && mysqli_num_rows($res_students) > 0): ?>
+                        <?php while($row = mysqli_fetch_assoc($res_students)): ?>
+                            <tr>
+                                <td class="fw-bold"><?php echo $row['student_id']; ?></td>
+                                <td><?php echo $row['student_name']; ?></td>
+                                <td class="small text-muted"><?php echo $row['major'] ?? 'เทคโนโลยีสารสนเทศ'; ?></td>
+                                <td class="small text-muted"><?php echo $row['company_name'] ?? '- ยังไม่มีบริษัท -'; ?></td>
+                                <td class="small text-muted"><?php echo $row['mentor_name'] ?? '- ยังไม่ระบุ -'; ?></td>
+                                <td class="text-center fw-bold text-success"><?php echo $row['total_hours']; ?> / 480 ชม.</td>
+                                <td class="text-center">
+                                    <a href="advisor_supervision.php?student_id=<?php echo $row['student_id']; ?>" class="btn btn-warning btn-sm fw-bold px-3 rounded-pill text-dark shadow-sm">
+                                        <i class="fa-solid fa-pen-to-square me-1"></i> นิเทศงาน
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <tr><td colspan="7" class="text-center text-muted py-4">ไม่พบข้อมูลนักศึกษาในความดูแล</td></tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
